@@ -1,0 +1,229 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Montserrat", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Charte MOTOM atténuée : le noir reste la couleur de structure, le jaune
+     ne sert plus que d'accent (filets, petites pastilles, survols). Les noms
+     historiques des jetons sont conservés pour ne pas réécrire le back-office. */
+  --color-navy: #171714;
+  --color-navy-light: #26261f;
+  --color-navy-dark: #0b0b09;
+
+  --color-gold: #f2c230;
+  --color-gold-light: #f8d460;
+  --color-gold-dark: #6f5814;
+
+  --color-green: #1f7a4c;
+  --color-green-dark: #17603b;
+
+  --color-ink: #171714;
+  --color-charcoal: #2a2a24;
+  --color-slate: #62625e;
+  --color-muted: #77776f;
+  --color-line: #e7e7e4;
+  --color-cream: #f5f6f6;
+  --color-sand: #f5f6f6;
+  --color-paper: #ffffff;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background-color: #ffffff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+}
+
+.container-page {
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .container-page {
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+  }
+}
+
+/* Petites étiquettes de section */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.eyebrow::before {
+  content: "";
+  width: 1.75rem;
+  height: 1px;
+  background-color: var(--color-gold);
+}
+
+/* Filet jaune sous les titres */
+.accent-line {
+  display: block;
+  width: 4rem;
+  height: 4px;
+  margin-top: 1rem;
+  border-radius: 9999px;
+  background-color: var(--color-gold);
+}
+
+/* Boutons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.8125rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.2;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-dark {
+  background-color: var(--color-ink);
+  color: #fff;
+}
+.btn-dark:hover {
+  background-color: var(--color-charcoal);
+}
+
+.btn-outline {
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+}
+.btn-outline:hover {
+  border-color: #bdb9aa;
+  background-color: #fff;
+}
+
+.btn-gold {
+  background-color: var(--color-gold);
+  color: var(--color-ink);
+}
+.btn-gold:hover {
+  background-color: var(--color-gold-light);
+}
+
+/* Champs de formulaire */
+.field {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-line);
+  background-color: #fff;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.field::placeholder {
+  color: #a3a096;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-gold-dark);
+  box-shadow: 0 0 0 3px rgba(217, 173, 47, 0.16);
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.55s ease both;
+}
+
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+.animate-shimmer {
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes progress {
+  0% { width: 0%; }
+  50% { width: 60%; }
+  100% { width: 100%; }
+}
+.animate-progress {
+  animation: progress 2s ease-in-out infinite;
+}
+
+::selection {
+  background-color: var(--color-gold);
+  color: var(--color-ink);
+}
+
+/* Select du back-office : fond sombre, texte blanc, hover jaune.
+   Les <option> sont stylés individuellement pour éviter le texte
+   illisible (blanc sur fond clair) selon le navigateur. */
+.bo-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--color-navy-light);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23D9AD2F' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.bo-select:hover {
+  background-color: var(--color-gold);
+  color: var(--color-navy);
+}
+.bo-select:focus {
+  outline: none;
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 3px rgba(217, 173, 47, 0.22);
+}
+.bo-select option {
+  background-color: var(--color-navy);
+  color: #ffffff;
+}
+.bo-select option:hover {
+  background-color: var(--color-gold);
+  color: var(--color-navy);
+}
+
+/* Select de filtre avec chevron discret */
+.select-filter {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2367655d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 42px;
+  cursor: pointer;
+}
