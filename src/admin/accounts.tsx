@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Bell, CheckCircle2, Copy, KeyRound, Laptop, Loader2, LogIn, Monitor, Plus, Send, ShieldCheck, ShieldX, Smartphone, Tablet, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Bell, CheckCircle2, Copy, KeyRound, Laptop, Loader2, LogIn, Monitor, Plus, RotateCcw, Send, ShieldCheck, ShieldX, Smartphone, Tablet, Trash2, X } from "lucide-react";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { useToast } from "../components/toast-context";
 import type { AdminProfile, AdminRow } from "../admin/types";
@@ -419,23 +419,60 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
 }
 
 
+const NOTIFICATIONS_CLEARED_KEY = "motom.notifications.clearedAt";
+
+function readClearedAt(): number {
+  if (typeof window === "undefined") return 0;
+  const parsed = Number.parseInt(
+    window.localStorage.getItem(NOTIFICATIONS_CLEARED_KEY) ?? "",
+    10
+  );
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+
+const initialClearedAt = typeof window === "undefined" ? 0 : readClearedAt();
+
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const [hasNew, setHasNew] = useState(false);
   const lastSeenRef = useRef<number>(Date.now());
+  const [clearedAt, setClearedAt] = useState<number>(initialClearedAt);
   const { data: events = [] } = useLoginEvents();
+
+  
+  
+  const visibleEvents = useMemo(
+    () => events.filter((e) => new Date(e.createdAt).getTime() > clearedAt),
+    [events, clearedAt]
+  );
 
   useEffect(() => {
     if (
-      events.some((e) => new Date(e.createdAt).getTime() > lastSeenRef.current)
+      visibleEvents.some(
+        (e) => new Date(e.createdAt).getTime() > lastSeenRef.current
+      )
     ) {
       setHasNew(true);
     }
-  }, [events]);
+  }, [visibleEvents]);
 
   const markSeen = () => {
     lastSeenRef.current = Date.now();
     setHasNew(false);
+  };
+
+  const clearAll = () => {
+    const now = Date.now();
+    lastSeenRef.current = now;
+    setHasNew(false);
+    setClearedAt(now);
+    window.localStorage.setItem(NOTIFICATIONS_CLEARED_KEY, String(now));
+  };
+
+  const restoreAll = () => {
+    setClearedAt(0);
+    window.localStorage.removeItem(NOTIFICATIONS_CLEARED_KEY);
   };
 
   const deviceIcon = (device: string) => {
@@ -466,19 +503,42 @@ export function NotificationsBell() {
         <>
           <div className="fixed inset-0 z-[-1]" onClick={() => setOpen(false)} />
           <div className="absolute right-0 mt-2 w-80 sm:w-96 max-h-[70vh] overflow-y-auto rounded-2xl bg-gradient-to-b from-navy-light to-navy-dark border border-gold/20 shadow-2xl p-4 animate-fade-up">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 mb-3">
               <h3 className="font-display font-semibold text-white text-sm">
                 Connexions récentes
               </h3>
-              <span className="text-[10px] text-white/40">24 dernières heures</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-white/40">24 dernières heures</span>
+                {visibleEvents.length > 0 ? (
+                  <button
+                    onClick={clearAll}
+                    title="Effacer les notifications"
+                    aria-label="Effacer les notifications"
+                    className="flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[10px] text-white/50 hover:text-gold hover:border-gold/40 transition-colors"
+                  >
+                    <Trash2 size={11} /> Effacer
+                  </button>
+                ) : clearedAt > 0 ? (
+                  <button
+                    onClick={restoreAll}
+                    title="Restaurer les notifications effacées"
+                    aria-label="Restaurer les notifications"
+                    className="flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[10px] text-white/50 hover:text-gold hover:border-gold/40 transition-colors"
+                  >
+                    <RotateCcw size={11} /> Restaurer
+                  </button>
+                ) : null}
+              </div>
             </div>
-            {events.length === 0 ? (
+            {visibleEvents.length === 0 ? (
               <p className="text-sm text-white/40 text-center py-8">
-                Aucune connexion détectée pour le moment.
+                {clearedAt > 0
+                  ? "Notifications effacées. Utilisez « Restaurer » pour les réafficher."
+                  : "Aucune connexion détectée pour le moment."}
               </p>
             ) : (
               <div className="space-y-2">
-                {events.map((e) => (
+                {visibleEvents.map((e) => (
                   <div key={e.id} className="flex items-start gap-3 rounded-xl bg-white/[0.04] border border-white/[0.06] p-3">
                     <span className="w-8 h-8 rounded-lg bg-gold/15 text-gold flex items-center justify-center shrink-0">
                       {deviceIcon(e.device)}
