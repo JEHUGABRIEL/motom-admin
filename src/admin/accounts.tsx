@@ -133,7 +133,7 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
           <h1 className="font-display font-bold text-white text-xl sm:text-2xl">Administrateurs</h1>
           <p className="text-sm text-white/40 mt-1">
             {isSuper
-              ? "Gérez les accès au back-office. Seul le superadmin peut inviter, bloquer ou supprimer."
+              ? "Gérez les accès au back-office. Seul le superadmin peut inviter, réinitialiser, bloquer ou supprimer."
               : "Vous consultez vos informations de compte."}
           </p>
         </div>
@@ -194,15 +194,17 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {isSuper && !isSelf && (
+                    <button
+                      onClick={() => setResetConfirm(a)}
+                      className="w-9 h-9 rounded-xl bg-white/[0.05] hover:bg-blue-400/10 text-white/50 hover:text-blue-400 border border-white/[0.06] flex items-center justify-center transition-all"
+                      title="Réinitialiser le mot de passe"
+                    >
+                      <KeyRound size={16} />
+                    </button>
+                  )}
                   {isSuper && a.role !== "superadmin" && (
                     <>
-                      <button
-                        onClick={() => setResetConfirm(a)}
-                        className="w-9 h-9 rounded-xl bg-white/[0.05] hover:bg-blue-400/10 text-white/50 hover:text-blue-400 border border-white/[0.06] flex items-center justify-center transition-all"
-                        title="Réinitialiser le mot de passe"
-                      >
-                        <KeyRound size={16} />
-                      </button>
                       <button
                         onClick={() => setBlockConfirm(a)}
                         className="w-9 h-9 rounded-xl bg-white/[0.05] hover:bg-amber-400/10 text-white/50 hover:text-amber-400 border border-white/[0.06] flex items-center justify-center transition-all"
