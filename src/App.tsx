@@ -4,10 +4,9 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 // Espace d'administration MOTOM — application séparée du site public.
-// Routes : / (connexion + tableau de bord), /invite, /reset.
+// Routes : / (connexion + tableau de bord) et /invite.
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminInvite = lazy(() => import("./pages/AdminInvite"));
-const AdminReset = lazy(() => import("./pages/AdminReset"));
 
 function PageFallback() {
   return (
@@ -34,7 +33,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Admin />} />
           <Route path="/invite" element={<AdminInvite />} />
-          <Route path="/reset" element={<AdminReset />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

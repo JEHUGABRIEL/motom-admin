@@ -30,7 +30,13 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
   const [blockConfirm, setBlockConfirm] = useState<AdminRow | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<AdminRow | null>(null);
   const [resetConfirm, setResetConfirm] = useState<AdminRow | null>(null);
-  const [resetResult, setResetResult] = useState<{ url: string; emailSent: boolean } | null>(null);
+  const [resetResult, setResetResult] = useState<{
+    tempPassword: string;
+    expiresAt: string;
+    emailSent: boolean;
+    emailError: string | null;
+    targetEmail: string;
+  } | null>(null);
   const resetting = resetPassword.isPending;
   const [copied, setCopied] = useState(false);
 
@@ -85,8 +91,14 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
     setResetResult(null);
     try {
       const data = await resetPassword.mutateAsync(admin.id);
-      setResetResult({ url: data.resetUrl, emailSent: data.emailSent });
-      success("Lien de réinitialisation envoyé");
+      setResetResult({
+        tempPassword: data.tempPassword,
+        expiresAt: data.expiresAt,
+        emailSent: data.emailSent,
+        emailError: data.emailError,
+        targetEmail: data.targetEmail || admin.email,
+      });
+      success("Mot de passe temporaire généré");
     } catch (err) {
       error(
         err instanceof Error && err.message
@@ -97,12 +109,12 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
     }
   };
 
-  const copyLink = async (url: string) => {
+  const copyLink = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      success("Lien copié");
+      success("Copié");
     } catch {
       error("Impossible de copier");
     }
@@ -318,7 +330,7 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
                 Réinitialiser le mot de passe ?
               </h3>
               <p className="text-sm text-white/50 mb-7 leading-relaxed">
-                Un lien de réinitialisation (valable 1 heure) sera envoyé à « {resetConfirm.email} ». L'admin pourra choisir un nouveau mot de passe.
+                Un mot de passe temporaire à usage unique sera généré pour « {resetConfirm.email} ». L'admin devra le remplacer dès sa prochaine connexion, puis valider un code reçu par email.
               </p>
               <div className="flex gap-3">
                 <button
@@ -333,7 +345,7 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
                   className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white transition-all flex items-center justify-center gap-2"
                 >
                   {resetting ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
-                  {resetting ? "Envoi…" : "Envoyer le lien"}
+                  {resetting ? "Génération…" : "Générer le mot de passe"}
                 </button>
               </div>
             </div>
@@ -351,28 +363,38 @@ export function AdminsPage({ me }: { me: AdminProfile | null }) {
             >
               <X size={16} />
             </button>
-            <h3 className="font-display font-semibold text-white text-lg mb-4">Réinitialisation demandée</h3>
+            <h3 className="font-display font-semibold text-white text-lg mb-4">Mot de passe temporaire</h3>
             {resetResult.emailSent ? (
               <div className="flex items-start gap-2 text-green-400 text-sm bg-green-400/10 rounded-xl px-4 py-3 mb-4">
                 <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
-                Email envoyé. L'admin recevra le lien de réinitialisation (valable 1 heure).
+                Email envoyé à {resetResult.targetEmail}. Transmettez aussi ce mot de passe hors application.
               </div>
             ) : (
               <div className="flex items-start gap-2 text-amber-400 text-sm bg-amber-400/10 rounded-xl px-4 py-3 mb-4">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                Email non envoyé (service non configuré ou domaine non vérifié). Transmettez le lien manuellement :
+                Email non envoyé ({resetResult.emailError ?? "service non configuré"}). Transmettez ce mot de passe hors application :
               </div>
             )}
-            <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-xl p-3 mb-6">
-              <p className="text-xs text-white/60 break-all flex-1">{resetResult.url}</p>
+            <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-xl p-3 mb-3">
+              <p className="font-mono text-sm text-white tracking-wider break-all flex-1">
+                {resetResult.tempPassword}
+              </p>
               <button
-                onClick={() => copyLink(resetResult.url)}
+                onClick={() => copyLink(resetResult.tempPassword)}
                 className="w-8 h-8 rounded-lg bg-white/[0.06] hover:bg-white/10 text-white/50 hover:text-gold flex items-center justify-center shrink-0 transition-colors"
-                title="Copier le lien"
+                title="Copier le mot de passe"
               >
                 {copied ? <CheckCircle2 size={14} className="text-green-400" /> : <Copy size={14} />}
               </button>
             </div>
+            <p className="text-[11px] leading-relaxed text-white/40 mb-6">
+              Valable jusqu'au{" "}
+              {new Date(resetResult.expiresAt).toLocaleString("fr-FR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })}
+              . Il ne s'affichera plus ensuite et expire dès la première connexion.
+            </p>
             <button
               onClick={() => { setResetConfirm(null); setResetResult(null); }}
               className="w-full px-4 py-2.5 rounded-xl text-sm font-medium bg-white/10 text-white hover:bg-white/20 transition-all"

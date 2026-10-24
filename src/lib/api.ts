@@ -320,25 +320,6 @@ export async function exportAuditLog(
   };
 }
 
-export type AuditImportResult = {
-  success: boolean;
-  imported: number;
-  skipped: number;
-  invalid: number;
-};
-
-export function useImportAuditLog() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (events: unknown[]) =>
-      apiFetch<AuditImportResult>("/api/audit", {
-        method: "POST",
-        body: JSON.stringify({ events }),
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["audit"] }),
-  });
-}
-
 export type AuditPurgeResult = {
   success: boolean;
   deleted: number;
@@ -617,8 +598,12 @@ export function useDeleteAdmin() {
 
 export type AdminResetResult = {
   success: boolean;
-  resetUrl: string;
+  /** Mot de passe temporaire à usage unique, affiché une seule fois. */
+  tempPassword: string;
+  expiresAt: string;
   emailSent: boolean;
+  emailError: string | null;
+  targetEmail: string;
 };
 
 export function useResetAdminPassword() {

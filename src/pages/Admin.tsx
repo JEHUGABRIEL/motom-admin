@@ -22,10 +22,17 @@ export default function Admin() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [forgotMode, setForgotMode] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotDone, setForgotDone] = useState(false);
-  const [forgotError, setForgotError] = useState("");
+  const [passwordChange, setPasswordChange] = useState(false);
+  const [pwdCurrent, setPwdCurrent] = useState("");
+  const [pwdNext, setPwdNext] = useState("");
+  const [pwdConfirm, setPwdConfirm] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [pwdBusy, setPwdBusy] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpEmailSent, setOtpEmailSent] = useState(true);
   const [error, setError] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
@@ -84,6 +91,18 @@ export default function Admin() {
         setPassword("");
         return;
       }
+      if (res.ok && data.passwordChangeRequired) {
+        // Connexion acceptée avec le mot de passe temporaire : aucune session
+        // n'est encore ouverte, l'admin doit d'abord choisir un mot de passe.
+        setPasswordChange(true);
+        setPwdCurrent(password);
+        setPwdNext("");
+        setPwdConfirm("");
+        setPwdError("");
+        setError("");
+        setPassword("");
+        return;
+      }
       if (res.ok && data.success) {
         setAuthenticated(true);
         setAdmin(data.admin ?? null);
@@ -127,23 +146,72 @@ export default function Admin() {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setForgotError("");
+    setPwdError("");
+    setPwdBusy(true);
     try {
-      const res = await fetch("/api/admins/forgot-password", {
+      const res = await fetch("/api/auth?step=change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: forgotEmail }),
+        body: JSON.stringify({
+          currentPassword: pwdCurrent,
+          newPassword: pwdNext,
+          confirmPassword: pwdConfirm,
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        setForgotDone(true);
-      } else {
-        setForgotError(data.error || "Impossible d'envoyer le lien");
+      if (res.ok && data.otpRequired) {
+        setPasswordChange(false);
+        setOtpStep(true);
+        setOtpEmailSent(data.emailSent !== false);
+        setOtpCode("");
+        setOtpError("");
+        setPwdCurrent("");
+        setPwdNext("");
+        setPwdConfirm("");
+        return;
       }
+      setPwdError(data.error || "Impossible de modifier le mot de passe");
     } catch {
-      setForgotError("Erreur de connexion au serveur");
+      setPwdError("Erreur de connexion au serveur");
+    } finally {
+      setPwdBusy(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpError("");
+    setOtpBusy(true);
+    try {
+      const res = await fetch("/api/auth?step=verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: otpCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.mfaRequired) {
+        setOtpStep(false);
+        setOtpCode("");
+        setMfaPending(true);
+        setMfaCode("");
+        setMfaError("");
+        return;
+      }
+      if (res.ok && data.success) {
+        setOtpStep(false);
+        setAuthenticated(true);
+        setAdmin(data.admin ?? null);
+        setPage("dashboard");
+        return;
+      }
+      setOtpError(data.error || "Code incorrect");
+      setOtpCode("");
+    } catch {
+      setOtpError("Erreur de connexion au serveur");
+    } finally {
+      setOtpBusy(false);
     }
   };
 
@@ -233,6 +301,219 @@ export default function Admin() {
     );
   }
 
+  if (!authenticated && otpStep) {
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-gold flex items-center justify-center mx-auto mb-5 shadow-xl shadow-gold/20">
+              <ShieldCheck size={28} className="text-navy" />
+            </div>
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-gold">
+              Étape 2 sur 2
+            </p>
+            <h1 className="mt-2 font-display font-bold text-white text-2xl">
+              Vérification par email
+            </h1>
+            <p className="text-white/50 text-sm mt-2 leading-relaxed">
+              Un code à 6 chiffres vient d'être envoyé à l'adresse de votre compte.
+              Il est valable 10 minutes.
+            </p>
+          </div>
+
+          <form
+            onSubmit={handleOtpSubmit}
+            className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl shadow-black/40 ring-1 ring-white/5 space-y-4"
+          >
+            {!otpEmailSent && (
+              <div className="flex items-start gap-2 text-amber-300 text-xs bg-amber-400/10 rounded-xl px-4 py-3">
+                <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                L'email n'a pas pu être envoyé (service email non configuré).
+                Demandez le code au super administrateur.
+              </div>
+            )}
+
+            <input
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              autoFocus
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              placeholder="123456"
+              aria-label="Code de vérification"
+              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-center text-white text-lg tracking-[0.4em] placeholder:text-white/25 placeholder:tracking-normal focus:outline-none focus:border-gold transition-all"
+            />
+
+            {otpError && <p className="text-red-300 text-sm text-center">{otpError}</p>}
+
+            <button
+              type="submit"
+              disabled={otpBusy || otpCode.length !== 6}
+              className="w-full px-4 py-3 rounded-xl text-sm font-semibold bg-gold hover:bg-gold-light text-navy disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+            >
+              {otpBusy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              {otpBusy ? "Vérification…" : "Valider le code"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOtpStep(false);
+                setOtpCode("");
+                setOtpError("");
+              }}
+              className="w-full text-center text-xs text-white/30 hover:text-white/60 transition-colors"
+            >
+              Revenir à la connexion
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authenticated && passwordChange) {
+    const rules = [
+      { label: "8 caractères minimum", ok: pwdNext.length >= 8 },
+      { label: "Une majuscule", ok: /[A-Z]/.test(pwdNext) },
+      { label: "Un chiffre", ok: /[0-9]/.test(pwdNext) },
+      { label: "Un caractère spécial", ok: /[^A-Za-z0-9]/.test(pwdNext) },
+    ];
+    const canSubmit =
+      rules.every((r) => r.ok) && pwdNext === pwdConfirm && pwdCurrent.length > 0;
+
+    return (
+      <div className="min-h-screen bg-navy flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-gold flex items-center justify-center mx-auto mb-5 shadow-xl shadow-gold/20">
+              <KeyRound size={28} className="text-navy" />
+            </div>
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-gold">
+              Étape 1 sur 2
+            </p>
+            <h1 className="mt-2 font-display font-bold text-white text-2xl">
+              Nouveau mot de passe
+            </h1>
+            <p className="text-white/50 text-sm mt-2 leading-relaxed">
+              Votre mot de passe temporaire est reconnu. Choisissez maintenant le mot
+              de passe définitif de votre compte.
+            </p>
+          </div>
+
+          <form
+            onSubmit={handlePasswordChange}
+            className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl shadow-black/40 ring-1 ring-white/5 space-y-4"
+          >
+            <div>
+              <label
+                htmlFor="pwd-current"
+                className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5 block"
+              >
+                Mot de passe temporaire
+              </label>
+              <input
+                id="pwd-current"
+                type="password"
+                value={pwdCurrent}
+                onChange={(e) => setPwdCurrent(e.target.value)}
+                autoFocus
+                autoComplete="current-password"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="pwd-next"
+                className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5 block"
+              >
+                Nouveau mot de passe
+              </label>
+              <input
+                id="pwd-next"
+                type="password"
+                value={pwdNext}
+                onChange={(e) => setPwdNext(e.target.value)}
+                autoComplete="new-password"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all"
+              />
+              <ul className="mt-2.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {rules.map((rule) => (
+                  <li
+                    key={rule.label}
+                    className={`flex items-center gap-1.5 text-[11px] ${
+                      rule.ok ? "text-emerald-300" : "text-white/35"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        rule.ok ? "bg-emerald-400" : "bg-white/25"
+                      }`}
+                    />
+                    {rule.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <label
+                htmlFor="pwd-confirm"
+                className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5 block"
+              >
+                Confirmer le mot de passe
+              </label>
+              <input
+                id="pwd-confirm"
+                type="password"
+                value={pwdConfirm}
+                onChange={(e) => setPwdConfirm(e.target.value)}
+                autoComplete="new-password"
+                className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all"
+              />
+              {pwdConfirm.length > 0 && pwdNext !== pwdConfirm && (
+                <p className="mt-2 text-xs text-red-300">
+                  Les deux mots de passe ne correspondent pas.
+                </p>
+              )}
+            </div>
+
+            {pwdError && (
+              <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 rounded-xl px-4 py-3">
+                <AlertCircle size={16} />
+                {pwdError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!canSubmit || pwdBusy}
+              className="w-full px-4 py-3 rounded-xl text-sm font-semibold bg-gold hover:bg-gold-light text-navy disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+            >
+              {pwdBusy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+              {pwdBusy ? "Enregistrement…" : "Enregistrer et recevoir le code"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPasswordChange(false);
+                setPwdCurrent("");
+                setPwdNext("");
+                setPwdConfirm("");
+                setPwdError("");
+              }}
+              className="w-full text-center text-xs text-white/30 hover:text-white/60 transition-colors"
+            >
+              Annuler et revenir à la connexion
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-navy flex items-center justify-center p-6">
@@ -249,7 +530,6 @@ export default function Admin() {
             </p>
           </div>
 
-          {!forgotMode && (
           <form
             onSubmit={handleLogin}
             className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl shadow-black/40 ring-1 ring-white/5 space-y-4"
@@ -294,18 +574,6 @@ export default function Admin() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setForgotMode(true);
-                setForgotDone(false);
-                setForgotError("");
-              }}
-              className="w-full text-center text-sm text-white/40 hover:text-gold transition-colors"
-            >
-              Mot de passe oublié ?
-            </button>
-
             {error && (
               <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 rounded-xl px-4 py-3">
                 <AlertCircle size={16} />
@@ -319,62 +587,11 @@ export default function Admin() {
               Se connecter
             </button>
           </form>
-          )}
 
-          {forgotMode && (
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl shadow-black/30">
-              {forgotDone ? (
-                <div className="text-center">
-                  <CheckCircle2 size={28} className="text-green-400 mx-auto mb-3" />
-                  <p className="text-sm text-white/70 leading-relaxed">
-                    Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé (valable 1 heure).
-                  </p>
-                  <button
-                    onClick={() => setForgotMode(false)}
-                    className="mt-5 w-full px-4 py-2.5 rounded-xl text-sm font-medium bg-gold hover:bg-gold-light text-navy transition-all"
-                  >
-                    Retour à la connexion
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5 block">
-                      Adresse email du compte
-                    </label>
-                    <input
-                      type="email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="votre@email.com"
-                      className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/10 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all"
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  {forgotError && (
-                    <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 rounded-xl px-4 py-3">
-                      <AlertCircle size={16} />
-                      {forgotError}
-                    </div>
-                  )}
-                  <button
-                    type="submit"
-                    className="w-full bg-gold hover:bg-gold-light text-navy font-semibold py-3 rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-gold/20"
-                  >
-                    Envoyer le lien
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForgotMode(false)}
-                    className="w-full text-center text-sm text-white/40 hover:text-white/60 transition-colors"
-                  >
-                    ← Retour à la connexion
-                  </button>
-                </form>
-              )}
-            </div>
-          )}
+          <p className="mt-5 text-center text-xs leading-relaxed text-white/30">
+            Mot de passe oublié ? Contactez le super administrateur : il génère un
+            mot de passe temporaire à usage unique.
+          </p>
 
           <a
             href={SITE_URL}

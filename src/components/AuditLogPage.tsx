@@ -10,7 +10,6 @@ import {
   Search,
   ShieldCheck,
   Trash2,
-  Upload,
   UserRound,
   X,
 } from "lucide-react";
@@ -19,7 +18,6 @@ import { useToast } from "./toast-context";
 import {
   exportAuditLog,
   useAuditLog,
-  useImportAuditLog,
   usePurgeAuditLog,
   type AuditEvent,
   type AuditStatus,
@@ -157,14 +155,31 @@ function StatusBadge({ status }: { status: AuditStatus }) {
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  if (!value) return null;
+function InfoCell({
+  label,
+  value,
+  icon: Icon,
+  mono,
+}: {
+  label: string;
+  value: string;
+  icon?: typeof UserRound;
+  mono?: boolean;
+}) {
+  const empty = !value || value === "—";
   return (
-    <div>
-      <dt className="text-[10px] font-semibold uppercase tracking-wider text-white/30">
+    <div className="bg-navy-dark px-4 py-3.5">
+      <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/30">
+        {Icon ? <Icon size={11} /> : null}
         {label}
       </dt>
-      <dd className="mt-1 break-words text-sm text-white/75">{value}</dd>
+      <dd
+        className={`mt-1.5 break-words text-sm ${mono ? "font-mono text-[12px]" : ""} ${
+          empty ? "text-white/25" : "text-white/80"
+        }`}
+      >
+        {value || "—"}
+      </dd>
     </div>
   );
 }
@@ -177,16 +192,12 @@ export default function AuditLogPage() {
   const [status, setStatus] = useState<AuditStatus | "all">("all");
   const [days, setDays] = useState(7);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
-  const [dialog, setDialog] = useState<null | "import" | "purge">(null);
+  const [dialog, setDialog] = useState<null | "purge">(null);
   const [exporting, setExporting] = useState(false);
-  const [importEvents, setImportEvents] = useState<unknown[] | null>(null);
-  const [importFileName, setImportFileName] = useState("");
-  const [importError, setImportError] = useState("");
   const [purgeAll, setPurgeAll] = useState(false);
   const [purgeDays, setPurgeDays] = useState(90);
   const [purgeConfirmed, setPurgeConfirmed] = useState(false);
   const toast = useToast();
-  const importMutation = useImportAuditLog();
   const purgeMutation = usePurgeAuditLog();
 
   useEffect(() => {
@@ -254,56 +265,10 @@ export default function AuditLogPage() {
     }
   };
 
-  const parseImportFile = async (file: File) => {
-    setImportFileName(file.name);
-    if (file.size > 8 * 1024 * 1024) {
-      setImportEvents(null);
-      setImportError("Fichier trop volumineux (8 Mo maximum).");
-      return;
-    }
-    try {
-      const parsed: unknown = JSON.parse(await file.text());
-      const events = Array.isArray(parsed)
-        ? parsed
-        : (parsed as { events?: unknown } | null)?.events;
-      if (!Array.isArray(events)) {
-        throw new Error("Le fichier doit contenir un tableau « events ».");
-      }
-      if (events.length === 0) throw new Error("Le fichier ne contient aucun événement.");
-      if (events.length > 5000) throw new Error("Import limité à 5 000 événements.");
-      setImportEvents(events);
-      setImportError("");
-    } catch (e) {
-      setImportEvents(null);
-      setImportError(e instanceof Error ? e.message : "Fichier illisible.");
-    }
-  };
-
   const closeDialog = () => {
     setDialog(null);
-    setImportEvents(null);
-    setImportFileName("");
-    setImportError("");
     setPurgeConfirmed(false);
     setPurgeAll(false);
-  };
-
-  const submitImport = () => {
-    if (!importEvents) return;
-    importMutation.mutate(importEvents, {
-      onSuccess: (result) => {
-        toast.success(
-          `Import terminé : ${result.imported} ajouté${
-            result.imported > 1 ? "s" : ""
-          }, ${result.skipped} déjà présent${result.skipped > 1 ? "s" : ""}, ${result.invalid} invalide${
-            result.invalid > 1 ? "s" : ""
-          }.`
-        );
-        closeDialog();
-      },
-      onError: (e) =>
-        toast.error(e instanceof Error ? e.message : "Import impossible."),
-    });
   };
 
   const submitPurge = () => {
@@ -360,14 +325,6 @@ export default function AuditLogPage() {
             >
               {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
               Exporter
-            </button>
-            <button
-              type="button"
-              onClick={() => setDialog("import")}
-              className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <Upload size={14} />
-              Importer
             </button>
             <button
               type="button"
@@ -582,158 +539,99 @@ export default function AuditLogPage() {
 
       {selected && (
         <div
-          className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-navy/80 p-4 pt-12 backdrop-blur-sm"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-navy/85 p-4 backdrop-blur-md"
           onClick={() => setSelected(null)}
           role="dialog"
           aria-modal="true"
-          aria-label="Détail de l'événement"
+          aria-labelledby="audit-detail-title"
         >
           <div
-            className="relative w-full max-w-2xl rounded-2xl border border-gold/20 bg-gradient-to-b from-navy-light to-navy-dark p-6 shadow-2xl sm:p-8"
+            className="relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-navy-dark shadow-[0_30px_80px_-24px_rgba(0,0,0,0.9)] ring-1 ring-black/40"
             onClick={(event) => event.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={() => setSelected(null)}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/10 hover:text-white"
-              aria-label="Fermer"
-            >
-              <X size={16} />
-            </button>
-
-            <div className="mb-6 flex items-start gap-3 pr-8">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/15 text-gold">
-                <ShieldCheck size={19} />
+            <div className="flex items-start gap-3.5 border-b border-white/[0.07] bg-white/[0.02] px-6 py-5 sm:px-8">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold/12 text-gold ring-1 ring-gold/20">
+                <ShieldCheck size={20} />
               </span>
-              <div>
-                <h2 className="font-display text-lg font-semibold text-white">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+                  Événement du journal
+                </p>
+                <h2
+                  id="audit-detail-title"
+                  className="mt-1 font-display text-lg font-semibold leading-snug text-white"
+                >
                   {actionLabel(selected.action)}
                 </h2>
-                <p className="mt-1 text-xs text-white/35">{formatDate(selected.createdAt)}</p>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={selected.status} />
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/55">
+                    <Clock size={11} /> {formatDate(selected.createdAt)}
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[10px] tracking-tight text-white/45">
+                    {selected.action}
+                  </span>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/35 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Fermer"
+              >
+                <X size={17} />
+              </button>
             </div>
 
-            <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <DetailRow label="Acteur" value={actorLabel(selected)} />
-              <DetailRow label="Rôle" value={selected.actor?.role ?? ""} />
-              <DetailRow
-                label="Email"
-                value={selected.actor?.email && selected.actor.email !== actorLabel(selected)
-                  ? selected.actor.email
-                  : ""}
-              />
-              <DetailRow label="Domaine" value={entityLabel(selected.entityType)} />
-              <DetailRow label="Identifiant cible" value={selected.entityId ?? ""} />
-              <DetailRow
-                label="Statut"
-                value={selected.status === "success" ? "Succès" : "Échec"}
-              />
-              <DetailRow label="Adresse IP" value={selected.ip} />
-              <DetailRow label="Action technique" value={selected.action} />
-            </dl>
+            <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8">
+              <h3 className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">
+                Contexte
+              </h3>
+              <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.06] sm:grid-cols-2">
+                <InfoCell label="Acteur" value={actorLabel(selected)} icon={UserRound} />
+                <InfoCell label="Rôle" value={selected.actor?.role ?? ""} />
+                <InfoCell
+                  label="Email"
+                  value={
+                    selected.actor?.email && selected.actor.email !== actorLabel(selected)
+                      ? selected.actor.email
+                      : ""
+                  }
+                />
+                <InfoCell label="Domaine" value={entityLabel(selected.entityType)} />
+                <InfoCell label="Identifiant cible" value={selected.entityId ?? ""} mono />
+                <InfoCell label="Adresse IP" value={selected.ip} mono />
+              </dl>
 
-            <div className="mt-6">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">
+              <h3 className="mb-3 mt-6 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">
                 Métadonnées
-              </p>
-              <pre className="mt-2 max-h-64 overflow-auto rounded-xl border border-white/[0.06] bg-black/20 p-4 text-[11px] leading-relaxed text-white/55">
+              </h3>
+              <pre className="max-h-72 overflow-auto rounded-xl border border-white/[0.06] bg-black/30 p-4 font-mono text-[11px] leading-relaxed text-white/60">
                 {JSON.stringify(selected.metadata ?? {}, null, 2)}
               </pre>
+
+              {selected.userAgent && (
+                <>
+                  <h3 className="mb-3 mt-6 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">
+                    Navigateur / appareil
+                  </h3>
+                  <p className="break-words rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-xs leading-relaxed text-white/50">
+                    {selected.userAgent}
+                  </p>
+                </>
+              )}
             </div>
 
-            {selected.userAgent && (
-              <div className="mt-5">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">
-                  Navigateur / appareil
-                </p>
-                <p className="mt-1 break-words text-xs text-white/45">{selected.userAgent}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {dialog === "import" && (
-        <div
-          className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-navy/80 p-4 pt-12 backdrop-blur-sm"
-          onClick={closeDialog}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Importer le journal d'audit"
-        >
-          <div
-            className="relative w-full max-w-xl rounded-2xl border border-gold/20 bg-gradient-to-b from-navy-light to-navy-dark p-6 shadow-2xl sm:p-8"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={closeDialog}
-              className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-lg text-white/30 transition-colors hover:bg-white/10 hover:text-white"
-              aria-label="Fermer"
-            >
-              <X size={16} />
-            </button>
-
-            <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-white">
-              <Upload size={18} className="text-gold" />
-              Importer un journal
-            </h2>
-            <p className="mt-2 text-sm text-white/45">
-              Fichier JSON produit par l'export du journal (format{" "}
-              <code className="text-white/60">{`{ "events": [ … ] }`}</code>). Les événements
-              dont l'identifiant existe déjà sont ignorés ; les entrées invalides sont comptabilisées
-              séparément.
-            </p>
-
-            <label className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/15 bg-white/[0.03] px-4 py-8 text-center transition-colors hover:border-gold/40 hover:bg-white/[0.05]">
-              <Upload size={22} className="text-white/35" />
-              <span className="text-sm font-medium text-white/75">
-                {importFileName || "Choisir un fichier .json"}
-              </span>
-              <span className="text-[11px] text-white/30">5 000 événements maximum · 8 Mo</span>
-              <input
-                type="file"
-                accept="application/json,.json"
-                className="sr-only"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void parseImportFile(file);
-                }}
-              />
-            </label>
-
-            {importError && (
-              <p className="mt-3 flex items-start gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                {importError}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] bg-white/[0.02] px-6 py-4 sm:px-8">
+              <p className="min-w-0 truncate text-[11px] text-white/30">
+                Identifiant : <span className="font-mono">{selected.id}</span>
               </p>
-            )}
-
-            {importEvents && (
-              <p className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-                <CheckCircle2 size={14} className="shrink-0" />
-                {importEvents.length.toLocaleString("fr-FR")} événement
-                {importEvents.length > 1 ? "s" : ""} prêt{importEvents.length > 1 ? "s" : ""} à être
-                importé{importEvents.length > 1 ? "s" : ""}.
-              </p>
-            )}
-
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={closeDialog}
-                className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-white/60 transition-colors hover:bg-white/5 hover:text-white"
+                onClick={() => setSelected(null)}
+                className="rounded-xl bg-gold px-4 py-2 text-xs font-semibold text-navy transition-colors hover:bg-gold-light"
               >
-                Annuler
-              </button>
-              <button
-                type="button"
-                onClick={submitImport}
-                disabled={!importEvents || importMutation.isPending}
-                className="flex items-center justify-center gap-2 rounded-xl bg-gold px-4 py-2.5 text-sm font-semibold text-navy transition-colors hover:bg-gold-light disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {importMutation.isPending && <Loader2 size={15} className="animate-spin" />}
-                Importer
+                Fermer
               </button>
             </div>
           </div>
